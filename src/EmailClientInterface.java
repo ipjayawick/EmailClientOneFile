@@ -1,4 +1,3 @@
-//****Set sender's email and password in SendEmailTLS class before executing the program.
 
 import javafx.util.Pair;
 
@@ -356,8 +355,8 @@ class MailComposer {
 class SendEmailTLS {
 
     /** Send an email via Gmail SMTP server with TLS*/
-    private final String username = "";//sender's email address
-    private final String password = "";//email password
+    private final String username = "isurupramudith.20@cse.mrt.ac.lk";//My email
+    private final String password = "cuhdilhfhzgocxzd";//Application-specific password generated using Google App password
     private Session session;
 
     SendEmailTLS() {
