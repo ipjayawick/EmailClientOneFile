@@ -1,3 +1,4 @@
+//200272L
 
 import javafx.util.Pair;
 
@@ -13,7 +14,7 @@ import java.util.Properties;
 import java.util.Scanner;
 
 
-class EmailClientInterface {
+public class Email_Client {
     public static void main(String[] args) {
         /**User Interface of the Email Client Application*/
         boolean programOn = true;
@@ -29,13 +30,7 @@ class EmailClientInterface {
         String userInput;
 
         while (programOn) {
-            System.out.println("\nEnter option : \n" +
-                    "1 - Adding a new recipient\n" +
-                    "2 - Sending an email\n" +
-                    "3 - Printing out all the recipients who have birthdays\n" +
-                    "4 - Printing out details of all the emails sent\n" +
-                    "5 - Printing out the number of recipient objects in the application\n" +
-                    "6 - Exit");
+            System.out.println("\nEnter option : \n" + "1 - Adding a new recipient\n" + "2 - Sending an email\n" + "3 - Printing out all the recipients who have birthdays\n" + "4 - Printing out details of all the emails sent\n" + "5 - Printing out the number of recipient objects in the application\n" + "6 - Exit");
             int option;
             try {
                 option = Integer.parseInt(scanner.nextLine());
@@ -46,28 +41,21 @@ class EmailClientInterface {
 
             switch (option) {
                 case 1:
-                    System.out.println("Enter recipient in this format --->\n" +
-                            "\tofficial: <name>, <email>,<designation>\n" +
-                            "\tOffice_friend: <name>,<email>,<designation>,<birthday(yyyy/MM/dd)>\n" +
-                            "\tPersonal: <name>,<nick-name>,<email>,<birthday(yyyy/MM/dd)>\n\n" +
-                            "\tExample---> Office_friend: kamal,kamal@gmail.com,clerk,2000/12/12");
+                    System.out.println("Enter recipient in this format --->\n" + "\tofficial: <name>, <email>,<designation>\n" + "\tOffice_friend: <name>,<email>,<designation>,<birthday(yyyy/MM/dd)>\n" + "\tPersonal: <name>,<nick-name>,<email>,<birthday(yyyy/MM/dd)>\n\n" + "\tExample---> Office_friend: kamal,kamal@gmail.com,clerk,2000/12/12");
                     userInput = scanner.nextLine();
                     program.addRecipient(userInput);
                     break;
                 case 2:
-                    // input format - email, subject, content
                     System.out.println("Enter details in the format ---> <email>, <subject>, <content>");
                     userInput = scanner.nextLine();
-                    program.sendEmail(userInput);//exception thrown
+                    program.sendEmail(userInput);
                     break;
                 case 3:
-                    // input format - yyyy/MM/dd (ex: 2018/09/17)
                     System.out.println("Enter date in the format ---> yyyy/MM/dd (ex: 2018/09/17)");
                     userInput = scanner.nextLine();
                     program.printRecipientsWithBirthDate(userInput);
                     break;
                 case 4:
-                    // input format - yyyy/MM/dd (ex: 2018/09/17)
                     System.out.println("Enter date in the format ---> yyyy/MM/dd (ex: 2018/09/17)");
                     userInput = scanner.nextLine();
                     program.printEmailsSentOnDate(userInput);
@@ -84,20 +72,36 @@ class EmailClientInterface {
 }
 
 class EmailClientProgram {
-    /**Back end program of Email Client Application which handles all the operations requested by the user*/
-    private final ArrayList<Wishable> birthdayRecipients = new ArrayList<>();
+    private static String lastAccess = null;
+    /**
+     * Back end program of Email Client Application which handles all the operations requested by the user
+     */
     private final ArrayList<Email> emails = new ArrayList<>();
     private ArrayList<Recipient> allRecipients = new ArrayList<>();
     private ArrayList<Wishable> wishableRecipients = new ArrayList<>();
 
     public EmailClientProgram() throws IOException, ParseException, ClassNotFoundException, MessagingException {
         System.out.println("Email Client Program is Starting...");
+        new File("log.txt").createNewFile();
         new File("Emails.ser").createNewFile();
         new File("clientList.txt").createNewFile();
+        refreshLog();
         loadRecipientLists();
-        loadBirthdayRecipients();
         sendBirthdayGreetings();
         loadEmails();
+    }
+
+    private void refreshLog() throws IOException {
+        File file = new File("log.txt");
+        if (file.length() == 0) {
+            lastAccess = null;
+        } else {
+            String date = new BufferedReader(new FileReader(file)).readLine();
+            lastAccess = date;
+        }
+        FileWriter writer = new FileWriter("log.txt");
+        writer.write(DateChecker.getCurrentDate());
+        writer.close();
     }
 
     private void loadRecipientLists() throws IOException {
@@ -106,34 +110,56 @@ class EmailClientProgram {
         wishableRecipients = pair.getValue();
     }
 
-    private void loadBirthdayRecipients() throws ParseException {
+    private void sendBirthdayGreetings() throws IOException, MessagingException, ParseException {
+        if (lastAccess != null && lastAccess.equals(DateChecker.getCurrentDate())) {
+            return;
+        }
+        System.out.println("Sending Birthday wishes...");
         for (Wishable wishable : wishableRecipients) {
             if (DateChecker.isTodayBirthday(wishable.getBirthday())) {
-                birthdayRecipients.add(wishable);
+                Email email = new BirthdayEmailCreator().createEmail(wishable);
+                MailComposer.sendEmail(email);
+                saveOnDisk(email);
             }
         }
     }
 
-    private void sendBirthdayGreetings() throws IOException, MessagingException {
-        for (Wishable wishable : birthdayRecipients) {
-            Email email = new BirthdayEmailCreator().createEmail(wishable);
+    private void sendBirthdayGreetings(Wishable wishable) {
+        System.out.println("Sending birthday wishes to newly added recipient!");
+        Email email = new BirthdayEmailCreator().createEmail(wishable);
+        try {
             MailComposer.sendEmail(email);
+            emails.add(email);
             saveOnDisk(email);
+        } catch (MessagingException | IOException e) {
+            System.out.println(e.getMessage());
         }
     }
 
     public void addRecipient(String userInput) {
         String[] recipient = userInput.replaceAll("\\s+", "").split(":|,");
-        boolean isAdded = RecipientCreator.addRecipientToList(recipient);
-        if (!isAdded) return;
-        allRecipients = RecipientCreator.getAllRecipients();
-        wishableRecipients = RecipientCreator.getWishableRecipients();
+        Recipient recipientObj = RecipientCreator.createRecipient(recipient);
+        if (recipientObj == null) {
+            System.out.println("Error: Recipient not Added!");
+            return;
+        }
         try {
             saveOnDisk(userInput);
             System.out.println("Recipient added Successfully!");
         } catch (IOException e) {
             System.out.println("Error: Recipient Not Saved on disk!");
             System.out.println(e.getMessage());
+        }
+
+        if (recipientObj instanceof Wishable) {
+            Wishable wishableRecipient = (Wishable) recipientObj;
+            try {
+                if (DateChecker.isTodayBirthday(wishableRecipient.getBirthday())) {
+                    sendBirthdayGreetings(wishableRecipient);
+                }
+            } catch (ParseException e) {
+                System.out.println(e.getMessage());
+            }
         }
     }
 
@@ -244,20 +270,11 @@ class EmailClientProgram {
     }
 }
 
-interface Wishable {
-    String getBirthdayWishMsg();
-
-    String getName();
-
-    String getEmail();
-
-    String getBirthday();
-
-}
-
 class MyObjectOutputStream extends ObjectOutputStream {
 
-    /** Modified Object Output Stream. Allows appending serialized objects to the same file without replacing the file with a new file */
+    /**
+     * Modified Object Output Stream. Allows appending serialized objects to the same file without replacing the file with a new file
+     */
     // Constructor of this class
     // 1. Default
     MyObjectOutputStream() throws IOException {
@@ -278,20 +295,14 @@ class MyObjectOutputStream extends ObjectOutputStream {
 }
 
 class RecipientCreator {
-    /**Create Recipient objects using recipient's data stored in the disk.
-     *Create Recipient objects using user input data.
-     *Store Created Recipient objects in lists and Return then when requested*/
+    /**
+     * Create Recipient objects using recipient's data stored in the disk.
+     * Create Recipient objects using user input data.
+     * Store Created Recipient objects in lists and Return then when requested
+     */
+
     private static final ArrayList<Recipient> allRecipients = new ArrayList<>();
     private static final ArrayList<Wishable> wishableRecipients = new ArrayList<>();
-    private static final ArrayList<String[]> recipientDataList = new ArrayList<>();
-
-    public static ArrayList<Recipient> getAllRecipients() {
-        return allRecipients;
-    }
-
-    public static ArrayList<Wishable> getWishableRecipients() {
-        return wishableRecipients;
-    }
 
     public static Pair<ArrayList<Recipient>, ArrayList<Wishable>> initializeAndGetRecipientLists() throws IOException {
         loadRecipientLists();
@@ -299,36 +310,37 @@ class RecipientCreator {
     }
 
     private static void loadRecipientLists() throws IOException {
-        lineByLineText();
+        ArrayList<String[]> recipientDataList = getDataFromSavedFile();
         for (String[] recipientData : recipientDataList) {
-            addRecipientToList(recipientData);
+            createRecipient(recipientData);
         }
     }
 
-    public static boolean addRecipientToList(String[] recipientData) {
+    public static Recipient createRecipient(String[] recipientData) {
         String friendState = recipientData[0].toLowerCase().trim();
         switch (friendState) {
             case "official":
-                allRecipients.add(new OfficialRecipient(recipientData[1], recipientData[2], recipientData[3]));
-                return true;
+                OfficialRecipient officialRecipient = new OfficialRecipient(recipientData[1], recipientData[2], recipientData[3]);
+                allRecipients.add(officialRecipient);
+                return officialRecipient;
             case "office_friend":
                 OfficeFriendRecipient officeFriendRecipient = new OfficeFriendRecipient(recipientData[1], recipientData[2], recipientData[3], recipientData[4]);
                 allRecipients.add(officeFriendRecipient);
                 wishableRecipients.add(officeFriendRecipient);
-                return true;
+                return officeFriendRecipient;
             case "personal":
                 PersonalRecipient personalRecipient = new PersonalRecipient(recipientData[1], recipientData[2], recipientData[3], recipientData[4]);
                 allRecipients.add(personalRecipient);
                 wishableRecipients.add(personalRecipient);
-                return true;
+                return personalRecipient;
             default:
                 System.out.println("Invalid Recipient data!");
-                return false;
+                return null;
         }
     }
 
-    private static void lineByLineText() throws IOException {
-
+    private static ArrayList<String[]> getDataFromSavedFile() throws IOException {
+        ArrayList<String[]> recipientDataList = new ArrayList<>();
         FileReader reader = new FileReader("clientList.txt");
         BufferedReader bufferedReader = new BufferedReader(reader);
         String line = null;
@@ -337,9 +349,11 @@ class RecipientCreator {
             recipientDataList.add(recipientData);
         }
         reader.close();
+        return recipientDataList;
     }
 
 }
+
 
 class MailComposer {
     private static final SendEmailTLS sendEmailTLS = new SendEmailTLS();
@@ -354,7 +368,9 @@ class MailComposer {
 
 class SendEmailTLS {
 
-    /** Send an email via Gmail SMTP server with TLS*/
+    /**
+     * Send an email via Gmail SMTP server with TLS
+     */
     private final String username = "isurupramudith.20@cse.mrt.ac.lk";//My email
     private final String password = "cuhdilhfhzgocxzd";//Application-specific password generated using Google App password
     private Session session;
@@ -370,21 +386,17 @@ class SendEmailTLS {
         prop.put("mail.smtp.auth", "true");
         prop.put("mail.smtp.starttls.enable", "true"); //TLS
 
-        session = Session.getInstance(prop,
-                new javax.mail.Authenticator() {
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(username, password);
-                    }
-                });
+        session = Session.getInstance(prop, new javax.mail.Authenticator() {
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(username, password);
+            }
+        });
     }
 
     void send(String recipientEmail, String subject, String content) throws MessagingException {
         Message message = new MimeMessage(session);
-        message.setFrom(new InternetAddress("from@gmail.com"));
-        message.setRecipients(
-                Message.RecipientType.TO,
-                InternetAddress.parse(recipientEmail)
-        );
+        message.setFrom(new InternetAddress(username));
+        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipientEmail));
         message.setSubject(subject);
         message.setText(content);
 
@@ -411,7 +423,13 @@ class DateChecker {
     public static String getCurrentDate() {
         return sdFormat.format(new Date());
     }
+
+    public static String getCurrentTime() {
+        SimpleDateFormat format = new SimpleDateFormat("hh:mm a");
+        return format.format(new Date());
+    }
 }
+
 
 abstract class Recipient {
     public static int RecipientCount = 0;
@@ -423,6 +441,16 @@ abstract class Recipient {
         this.name = name;
         this.email = email;
     }
+
+}
+interface Wishable {
+    String getBirthdayWishMsg();
+
+    String getName();
+
+    String getEmail();
+
+    String getBirthday();
 
 }
 
@@ -448,7 +476,7 @@ class PersonalRecipient extends Recipient implements Wishable {
 
     @Override
     public String getEmail() {
-        return null;
+        return this.email;
     }
 
     @Override
@@ -487,7 +515,7 @@ class OfficeFriendRecipient extends Recipient implements Wishable {
     }
 
     public String getEmail() {
-        return email;
+        return this.email;
     }
 
     public String getBirthday() {
@@ -500,12 +528,14 @@ class Email implements Serializable {
     private final String content;
     private final String recipientEmail;
     private final String sentDate;
+    private final String sentTime;
 
     public Email(String recipientEmail, String subject, String content) {
         this.subject = subject;
         this.content = content;
         this.recipientEmail = recipientEmail;
         this.sentDate = DateChecker.getCurrentDate();
+        this.sentTime = DateChecker.getCurrentTime();
     }
 
     public String getSubject() {
@@ -525,10 +555,10 @@ class Email implements Serializable {
     }
 
     public String getEmailSummary() {
-        return ("Recipient:\t" + recipientEmail +
-                "\nSubject:\t" + subject + "\n");
+        return ("Recipient:\t" + recipientEmail + "\nSubject:\t" + subject + "\nSent on:\t" + sentTime + "\n");
     }
 }
+
 
 abstract class EmailCreator {
     Email email;
